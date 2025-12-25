@@ -149,9 +149,8 @@ const static struct rt_device_ops ops =
     RT_NULL,
     led_write,
     led_control,
-	RT_NULL;
+	RT_NULL
 };
-
 #endif
 
 
@@ -164,7 +163,7 @@ rt_err_t rt_hw_led_init(const char *name, rt_base_t pin, rt_uint8_t activeLevel)
 
 
 #ifdef RT_USING_DEVICE_OPS
-    device->ops         = &ops;
+    devLed->parent.ops = &ops; 
 #else
     devLed->parent.init    = led_init;
     devLed->parent.open    = led_open;
