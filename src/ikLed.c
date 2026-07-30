@@ -14,7 +14,7 @@
 
 
 /*************************************1>独立模块函数:为规范多态接口函数提供支持***********************************************/
-static rt_err_t rt_led_set_state(ikled_device_ptr led, rt_uint8_t state) {
+static rt_err_t rt_led_set_state(ikled_device_t led, rt_uint8_t state) {
     if(led == RT_NULL)
         return -RT_ERROR;
 
@@ -25,7 +25,7 @@ static rt_err_t rt_led_set_state(ikled_device_ptr led, rt_uint8_t state) {
 }
 
 
-static rt_err_t rt_led_get_state(ikled_device_ptr led, rt_uint8_t *state) {
+static rt_err_t rt_led_get_state(ikled_device_t led, rt_uint8_t *state) {
     if(led == RT_NULL || state == RT_NULL)
         return -RT_ERROR;
 
@@ -34,7 +34,7 @@ static rt_err_t rt_led_get_state(ikled_device_ptr led, rt_uint8_t *state) {
 }
 
 
-static rt_err_t rt_led_toggle(ikled_device_ptr led) {
+static rt_err_t rt_led_toggle(ikled_device_t led) {
     if(led == RT_NULL)
         return -RT_ERROR;
 
@@ -44,12 +44,12 @@ static rt_err_t rt_led_toggle(ikled_device_ptr led) {
 
 //为blink功能设计A函数
 static void led_on(void* dev) {
-    ikled_device_ptr led = (ikled_device_ptr)dev;
+    ikled_device_t led = (ikled_device_t)dev;
     rt_led_set_state(led, 1);
 }
 //为blink功能设计B函数
 static void led_off(void* dev) {
-    ikled_device_ptr led = (ikled_device_ptr)dev;
+    ikled_device_t led = (ikled_device_t)dev;
     rt_led_set_state(led, 0);
 }
 
@@ -59,7 +59,7 @@ static void led_off(void* dev) {
 
 /*************************************2>规范多态接口:对接设备驱动框架***********************************************/
 static rt_err_t led_init(rt_device_t dev) {
-    ikled_device_ptr led = (ikled_device_ptr)dev;
+    ikled_device_t led = (ikled_device_t)dev;
 
     rt_pin_mode(led->pin, PIN_MODE_OUTPUT);
     rt_pin_write(led->pin, !led->activeLevel);
@@ -69,22 +69,32 @@ static rt_err_t led_init(rt_device_t dev) {
 }
 
 static rt_err_t led_open(rt_device_t dev, rt_uint16_t oflag) {
-    ikled_device_ptr led = (ikled_device_ptr)dev;
+    ikled_device_t led = (ikled_device_t)dev;
 
     return rt_led_set_state(led, 1);
 }
 
 static rt_err_t led_close(rt_device_t dev) {
-    ikled_device_ptr led = (ikled_device_ptr)dev;
+    ikled_device_t led = (ikled_device_t)dev;
 
     return rt_led_set_state(led, 0);
 }
 
-static rt_ssize_t led_write(rt_device_t dev, rt_off_t pos, const void *buffer, rt_size_t size) {
+static rt_size_t led_read(rt_device_t dev, rt_off_t pos, void *buffer, rt_size_t size){
+    if (buffer == RT_NULL || size == 0)
+        return 0;
+
+    ikled_device_t led = (ikled_device_t)dev;
+    rt_uint8_t *buf = (rt_uint8_t *)buffer;
+    buf[0] = led->state;
+
+    return 1;
+}
+static rt_size_t led_write(rt_device_t dev, rt_off_t pos, const void *buffer, rt_size_t size) {
     if(buffer == RT_NULL || size == 0)
         return -RT_ERROR;
 
-    ikled_device_ptr led = (ikled_device_ptr)dev;
+    ikled_device_t led = (ikled_device_t)dev;
 
     rt_uint8_t state;
     state = *(rt_uint8_t *)buffer;
@@ -95,7 +105,7 @@ static rt_ssize_t led_write(rt_device_t dev, rt_off_t pos, const void *buffer, r
 }
 
 static rt_err_t led_control(rt_device_t dev, int cmd, void *args) {
-    ikled_device_ptr led = (ikled_device_ptr)dev;
+    ikled_device_t led = (ikled_device_t)dev;
 
     rt_err_t result = RT_EOK;
     led_blink_cfg_t *blinkCfg;
@@ -146,7 +156,7 @@ const static struct rt_device_ops ops =
     led_init,
     led_open,
     led_close,
-    RT_NULL,
+    led_read,
     led_write,
     led_control,
 	RT_NULL
@@ -157,7 +167,7 @@ const static struct rt_device_ops ops =
 /*****************************************3>挂到设备驱动框架 register对应find*****************************************************/
 
 rt_err_t rt_hw_led_init(const char *name, rt_base_t pin, rt_uint8_t activeLevel) {
-    ikled_device_ptr devLed = rt_malloc(sizeof(ikled_device_t));
+    ikled_device_t devLed = rt_malloc(sizeof(struct ikled_device));
     rt_err_t result;
     rt_memset(devLed, 0, sizeof(ikled_device_t));
 
@@ -168,7 +178,7 @@ rt_err_t rt_hw_led_init(const char *name, rt_base_t pin, rt_uint8_t activeLevel)
     devLed->parent.init    = led_init;
     devLed->parent.open    = led_open;
     devLed->parent.close   = led_close;
-    devLed->parent.read    = RT_NULL;
+    devLed->parent.read    = led_read;
     devLed->parent.write   = led_write;
     devLed->parent.control = led_control;
     devLed->parent.user_data = RT_NULL;
@@ -191,72 +201,24 @@ rt_err_t rt_hw_led_init(const char *name, rt_base_t pin, rt_uint8_t activeLevel)
 
 
 
+#define LED_NAME               IKUNLED_DEMO_NAME
+#define LED_PIN                rt_pin_get(IKUNLED_DEMO_PIN) 
+#define LED_ACIVE_LEV          IKUNLED_DEMO_ACTIVE_LEVEL
 
-
-
-#define LED_NAME              "led1"
-#define LED_PIN                rt_pin_get("PB.12") 
-#define LED_ACIVE_LEV          0
-static void ledDev_sample(void) {
-    rt_uint8_t state;
-    led_blink_cfg_t cfg = {3, 200};
-
+int rt_hw_led1_init(void){
     rt_hw_led_init(LED_NAME, LED_PIN,LED_ACIVE_LEV);
 
-    /* 查找LED设备 */
-    rt_device_t ledDev = rt_device_find(LED_NAME);
-
-    /* 打开LED设备(会点亮LED) */
-    rt_kprintf("LED open \n");
-    rt_device_open(ledDev, RT_DEVICE_OFLAG_RDWR);
-    rt_thread_mdelay(1000);
-
-    /* 关闭LED */
-    rt_kprintf("LED close \n");
-    rt_device_close(ledDev);
-    rt_thread_mdelay(1000);
-
-    /* 获取LED状态并打印 */
-    rt_device_control(ledDev, LED_CMD_GET_STATE, &state);
-    rt_kprintf("LED state: %d \n", state);
-
-   /* 翻转LED */
-    rt_device_control(ledDev, LED_CMD_TOGGLE, NULL);
-    rt_device_control(ledDev, LED_CMD_GET_STATE, &state);
-    rt_kprintf("LED state: %d \n", state);
-  
-
-    rt_device_control(ledDev, LED_CMD_BLINK,  (void *)&cfg);
-    rt_thread_mdelay(5000);
+    return RT_EOK;
 }
 
-MSH_CMD_EXPORT(ledDev_sample, ledDev_sample);
 
 
 
-/***************************************** 二次封装*****************************************************/
-/***************************************** 二次封装*****************************************************/
 
-int ikled_init(const char *name, rt_base_t pin, rt_uint8_t activeLevel) {
-    return rt_hw_led_init(name, pin, activeLevel);
-}
 
-void ikled_blink(const char* name, rt_uint16_t count, rt_uint16_t period){
-    rt_device_t ikDev = rt_device_find(name);
-    led_blink_cfg_t blinkCfg;
-    blinkCfg.count = count;
-    blinkCfg.period = period;
-    rt_device_control(ikDev, LED_CMD_BLINK,  (void *)&blinkCfg);
-}
 
-void ikled_on(const char* name){
-    rt_device_t ikDev = rt_device_find(name);
-    rt_device_open(ikDev, RT_DEVICE_OFLAG_RDWR);
-}
 
-void ikled_off(const char* name){
-    rt_device_t ikDev = rt_device_find(name);
-    rt_device_close(ikDev);
-}
+
+
 
 

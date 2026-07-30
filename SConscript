@@ -11,7 +11,6 @@ src += Glob('util/*.c')
 CPPPATH = [cwd + '/inc', cwd + '/util']
 
 # 检查是否定义了 USING_IKUNLED_DEMO 宏
-# 使用 GetDepend 而不是 GetDefine
 if GetDepend('USING_IKUNLED_DEMO'):
     src += Glob('example/*.c')
     # 添加示例代码的头文件路径
