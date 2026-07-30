@@ -34,6 +34,7 @@ struct ikled_device {
 
 typedef struct ikled_device *ikled_device_t;    /* 结构体指针类型 */
 
+//为删除宏 不自动初始化 做准备
 int rt_hw_led1_init(void);
 
 #endif /* __DRV_LED_H__ */

@@ -213,7 +213,7 @@ int rt_hw_led1_init(void){
 
 
 
-
+INIT_DEVICE_EXPORT(rt_hw_led1_init);
 
 
 
